@@ -19,6 +19,8 @@ import {
   Bird
 } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 
 type PetType = "dog" | "cat" | "bird" | "rabbit" | "other";
 
@@ -35,6 +37,8 @@ interface Pet {
 
 const RegisterOwner = () => {
   const navigate = useNavigate();
+  const { signUp } = useAuth();
+  const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
     firstName: "",
@@ -95,13 +99,56 @@ const RegisterOwner = () => {
     setPets(pets.filter((p) => p.id !== id));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
     if (step < 3) {
       setStep(step + 1);
       return;
     }
-    // Final submission
+
+    if (formData.password !== formData.confirmPassword) {
+      toast.error("Passwords do not match");
+      return;
+    }
+
+    setLoading(true);
+
+    const { error } = await signUp(formData.email, formData.password, {
+      full_name: `${formData.firstName} ${formData.lastName}`,
+      phone: formData.phone,
+      role: 'owner',
+    });
+
+    if (error) {
+      toast.error(error.message || "Failed to create account");
+      setLoading(false);
+      return;
+    }
+
+    // Update profile with city and pincode
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await supabase
+        .from('profiles')
+        .update({ city: formData.city, pincode: formData.pincode })
+        .eq('id', user.id);
+
+      // Add pets
+      for (const pet of pets) {
+        await supabase.from('pets').insert({
+          owner_id: user.id,
+          name: pet.name,
+          pet_type: pet.type,
+          breed: pet.breed,
+          age: pet.age ? parseInt(pet.age) : null,
+          weight: pet.weight ? parseFloat(pet.weight) : null,
+          sex: pet.gender,
+          special_needs: pet.specialNeeds || null,
+        });
+      }
+    }
+
     toast.success("Account created successfully!");
     navigate("/dashboard/owner");
   };
@@ -405,7 +452,7 @@ const RegisterOwner = () => {
 
                           <div className="grid grid-cols-2 gap-4">
                             <div>
-                              <label className="text-sm font-medium mb-1 block">Name</label>
+                              <label className="text-sm font-medium mb-1 block">Pet Name</label>
                               <input
                                 type="text"
                                 name="name"
@@ -436,7 +483,7 @@ const RegisterOwner = () => {
                                 name="age"
                                 value={currentPet.age || ""}
                                 onChange={handlePetInputChange}
-                                placeholder="2 years"
+                                placeholder="3 years"
                                 className="w-full h-10 px-3 rounded-lg bg-card border border-border focus:border-primary outline-none"
                               />
                             </div>
@@ -455,7 +502,7 @@ const RegisterOwner = () => {
                               <label className="text-sm font-medium mb-1 block">Gender</label>
                               <select
                                 name="gender"
-                                value={currentPet.gender || "male"}
+                                value={currentPet.gender}
                                 onChange={handlePetInputChange}
                                 className="w-full h-10 px-3 rounded-lg bg-card border border-border focus:border-primary outline-none"
                               >
@@ -466,12 +513,12 @@ const RegisterOwner = () => {
                           </div>
 
                           <div>
-                            <label className="text-sm font-medium mb-1 block">Special Needs (optional)</label>
+                            <label className="text-sm font-medium mb-1 block">Special Needs (Optional)</label>
                             <textarea
                               name="specialNeeds"
                               value={currentPet.specialNeeds || ""}
                               onChange={handlePetInputChange}
-                              placeholder="Any medical conditions, allergies, or behavioral notes..."
+                              placeholder="Any allergies, medications, or special requirements..."
                               rows={2}
                               className="w-full px-3 py-2 rounded-lg bg-card border border-border focus:border-primary outline-none resize-none"
                             />
@@ -487,24 +534,21 @@ const RegisterOwner = () => {
                           </div>
                         </div>
                       ) : (
-                        <button
+                        <Button
                           type="button"
+                          variant="outline"
                           onClick={() => setShowPetForm(true)}
-                          className="w-full p-4 rounded-xl border-2 border-dashed border-border hover:border-primary/50 flex items-center justify-center gap-2 text-muted-foreground hover:text-primary transition-colors"
+                          className="w-full gap-2"
                         >
-                          <Plus className="w-5 h-5" />
+                          <Plus className="w-4 h-4" />
                           Add a Pet
-                        </button>
+                        </Button>
                       )}
-
-                      <p className="text-sm text-muted-foreground text-center">
-                        You can add more pets later from your dashboard
-                      </p>
                     </div>
                   )}
 
                   {/* Navigation */}
-                  <div className="flex gap-3 mt-8">
+                  <div className="flex gap-3 mt-6">
                     {step > 1 && (
                       <Button
                         type="button"
@@ -520,10 +564,10 @@ const RegisterOwner = () => {
                       type="submit"
                       variant="hero"
                       className="flex-1 gap-2"
-                      disabled={!validateStep()}
+                      disabled={!validateStep() || loading}
                     >
-                      {step === 3 ? "Create Account" : "Continue"}
-                      <ArrowRight className="w-4 h-4" />
+                      {loading ? "Creating account..." : step < 3 ? "Continue" : "Create Account"}
+                      {!loading && <ArrowRight className="w-4 h-4" />}
                     </Button>
                   </div>
                 </form>
