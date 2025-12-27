@@ -14,16 +14,235 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      caregiver_profiles: {
+        Row: {
+          availability: Json | null
+          bio: string | null
+          created_at: string
+          daily_rate: number | null
+          hourly_rate: number | null
+          id: string
+          is_background_checked: boolean | null
+          is_verified: boolean | null
+          languages: string[] | null
+          portfolio_images: string[] | null
+          rating: number | null
+          service_radius: number | null
+          services_offered: string[] | null
+          total_reviews: number | null
+          updated_at: string
+          user_id: string
+          years_experience: number | null
+        }
+        Insert: {
+          availability?: Json | null
+          bio?: string | null
+          created_at?: string
+          daily_rate?: number | null
+          hourly_rate?: number | null
+          id?: string
+          is_background_checked?: boolean | null
+          is_verified?: boolean | null
+          languages?: string[] | null
+          portfolio_images?: string[] | null
+          rating?: number | null
+          service_radius?: number | null
+          services_offered?: string[] | null
+          total_reviews?: number | null
+          updated_at?: string
+          user_id: string
+          years_experience?: number | null
+        }
+        Update: {
+          availability?: Json | null
+          bio?: string | null
+          created_at?: string
+          daily_rate?: number | null
+          hourly_rate?: number | null
+          id?: string
+          is_background_checked?: boolean | null
+          is_verified?: boolean | null
+          languages?: string[] | null
+          portfolio_images?: string[] | null
+          rating?: number | null
+          service_radius?: number | null
+          services_offered?: string[] | null
+          total_reviews?: number | null
+          updated_at?: string
+          user_id?: string
+          years_experience?: number | null
+        }
+        Relationships: []
+      }
+      pets: {
+        Row: {
+          age: number | null
+          behavior_notes: string | null
+          breed: string | null
+          created_at: string
+          feeding_schedule: string | null
+          id: string
+          medical_conditions: string | null
+          name: string
+          owner_id: string
+          pet_type: string
+          photo_url: string | null
+          sex: string | null
+          special_needs: string | null
+          temperament: string | null
+          updated_at: string
+          vaccination_status: string | null
+          weight: number | null
+        }
+        Insert: {
+          age?: number | null
+          behavior_notes?: string | null
+          breed?: string | null
+          created_at?: string
+          feeding_schedule?: string | null
+          id?: string
+          medical_conditions?: string | null
+          name: string
+          owner_id: string
+          pet_type: string
+          photo_url?: string | null
+          sex?: string | null
+          special_needs?: string | null
+          temperament?: string | null
+          updated_at?: string
+          vaccination_status?: string | null
+          weight?: number | null
+        }
+        Update: {
+          age?: number | null
+          behavior_notes?: string | null
+          breed?: string | null
+          created_at?: string
+          feeding_schedule?: string | null
+          id?: string
+          medical_conditions?: string | null
+          name?: string
+          owner_id?: string
+          pet_type?: string
+          photo_url?: string | null
+          sex?: string | null
+          special_needs?: string | null
+          temperament?: string | null
+          updated_at?: string
+          vaccination_status?: string | null
+          weight?: number | null
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          address: string | null
+          avatar_url: string | null
+          city: string | null
+          created_at: string
+          email: string
+          full_name: string
+          id: string
+          phone: string | null
+          pincode: string | null
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          avatar_url?: string | null
+          city?: string | null
+          created_at?: string
+          email: string
+          full_name: string
+          id: string
+          phone?: string | null
+          pincode?: string | null
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          avatar_url?: string | null
+          city?: string | null
+          created_at?: string
+          email?: string
+          full_name?: string
+          id?: string
+          phone?: string | null
+          pincode?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      subscription_plans: {
+        Row: {
+          created_at: string
+          expires_at: string | null
+          id: string
+          is_active: boolean
+          razorpay_payment_id: string | null
+          razorpay_subscription_id: string | null
+          tier: Database["public"]["Enums"]["subscription_tier"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          razorpay_payment_id?: string | null
+          razorpay_subscription_id?: string | null
+          tier?: Database["public"]["Enums"]["subscription_tier"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          razorpay_payment_id?: string | null
+          razorpay_subscription_id?: string | null
+          tier?: Database["public"]["Enums"]["subscription_tier"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "owner" | "caregiver" | "admin"
+      subscription_tier: "free" | "basic" | "premium"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +369,9 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["owner", "caregiver", "admin"],
+      subscription_tier: ["free", "basic", "premium"],
+    },
   },
 } as const
