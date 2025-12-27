@@ -16,6 +16,8 @@ import {
   Check
 } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 
 const services = [
   { id: "walking", label: "Dog Walking", price: "300" },
@@ -30,6 +32,8 @@ const services = [
 
 const RegisterCaregiver = () => {
   const navigate = useNavigate();
+  const { signUp } = useAuth();
+  const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
     firstName: "",
@@ -66,12 +70,65 @@ const RegisterCaregiver = () => {
     setSelectedServices({ ...selectedServices, [serviceId]: price });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
     if (step < 3) {
       setStep(step + 1);
       return;
     }
+
+    if (formData.password !== formData.confirmPassword) {
+      toast.error("Passwords do not match");
+      return;
+    }
+
+    if (Object.keys(selectedServices).length === 0) {
+      toast.error("Please select at least one service");
+      return;
+    }
+
+    setLoading(true);
+
+    const { error } = await signUp(formData.email, formData.password, {
+      full_name: `${formData.firstName} ${formData.lastName}`,
+      phone: formData.phone,
+      role: 'caregiver',
+    });
+
+    if (error) {
+      toast.error(error.message || "Failed to create account");
+      setLoading(false);
+      return;
+    }
+
+    // Update profile and caregiver profile
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await supabase
+        .from('profiles')
+        .update({ city: formData.city, pincode: formData.pincode })
+        .eq('id', user.id);
+
+      // Parse experience to years
+      let yearsExp = 0;
+      if (formData.experience === "< 1 year") yearsExp = 0;
+      else if (formData.experience === "1-2 years") yearsExp = 1;
+      else if (formData.experience === "3-5 years") yearsExp = 3;
+      else if (formData.experience === "5+ years") yearsExp = 5;
+
+      await supabase
+        .from('caregiver_profiles')
+        .update({
+          bio: formData.bio,
+          years_experience: yearsExp,
+          service_radius: parseInt(formData.serviceRadius),
+          services_offered: Object.keys(selectedServices),
+          hourly_rate: Math.min(...Object.values(selectedServices).map(p => parseFloat(p) || 0)),
+        })
+        .eq('user_id', user.id);
+    }
+
     toast.success("Account created! Welcome to PetPals.");
     navigate("/dashboard/caregiver");
   };
@@ -383,19 +440,24 @@ const RegisterCaregiver = () => {
                             className={`p-4 rounded-xl border-2 transition-all ${
                               selectedServices[service.id]
                                 ? "border-secondary bg-secondary/5"
-                                : "border-border hover:border-secondary/30"
+                                : "border-border"
                             }`}
                           >
                             <div className="flex items-center justify-between">
-                              <label className="flex items-center gap-3 cursor-pointer flex-1">
-                                <input
-                                  type="checkbox"
-                                  checked={!!selectedServices[service.id]}
-                                  onChange={() => toggleService(service.id, service.price)}
-                                  className="w-5 h-5 rounded border-border text-secondary focus:ring-secondary"
-                                />
+                              <div className="flex items-center gap-3">
+                                <button
+                                  type="button"
+                                  onClick={() => toggleService(service.id, service.price)}
+                                  className={`w-6 h-6 rounded-md flex items-center justify-center transition-all ${
+                                    selectedServices[service.id]
+                                      ? "bg-secondary text-secondary-foreground"
+                                      : "border border-border"
+                                  }`}
+                                >
+                                  {selectedServices[service.id] && <Check className="w-4 h-4" />}
+                                </button>
                                 <span className="font-medium">{service.label}</span>
-                              </label>
+                              </div>
                               {selectedServices[service.id] && (
                                 <div className="flex items-center gap-2">
                                   <span className="text-sm text-muted-foreground">₹</span>
@@ -403,44 +465,47 @@ const RegisterCaregiver = () => {
                                     type="number"
                                     value={selectedServices[service.id]}
                                     onChange={(e) => updateServicePrice(service.id, e.target.value)}
-                                    className="w-20 h-8 px-2 rounded-lg bg-card border border-border text-sm text-right focus:border-secondary outline-none"
+                                    className="w-20 h-8 px-2 text-right rounded-lg bg-card border border-border focus:border-secondary outline-none"
                                   />
+                                  <span className="text-sm text-muted-foreground">/hr</span>
                                 </div>
                               )}
                             </div>
                           </div>
                         ))}
                       </div>
-
-                      <p className="text-sm text-muted-foreground text-center pt-2">
-                        You can update services and prices anytime from your dashboard
-                      </p>
                     </div>
                   )}
 
                   {/* Navigation */}
-                  <div className="flex gap-3 mt-8">
+                  <div className="flex gap-3 mt-6">
                     {step > 1 && (
-                      <Button type="button" variant="outline" onClick={() => setStep(step - 1)} className="gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setStep(step - 1)}
+                        className="gap-2"
+                      >
                         <ArrowLeft className="w-4 h-4" />
                         Back
                       </Button>
                     )}
                     <Button
                       type="submit"
-                      variant="secondary"
+                      variant="hero"
                       className="flex-1 gap-2"
-                      disabled={!validateStep()}
+                      disabled={!validateStep() || loading}
                     >
-                      {step === 3 ? "Create Account" : "Continue"}
-                      <ArrowRight className="w-4 h-4" />
+                      {loading ? "Creating account..." : step < 3 ? "Continue" : "Start Earning"}
+                      {!loading && <ArrowRight className="w-4 h-4" />}
                     </Button>
                   </div>
                 </form>
 
+                {/* Login link */}
                 <p className="text-center text-muted-foreground mt-6">
                   Already have an account?{" "}
-                  <Link to="/login" className="text-secondary font-medium hover:underline">
+                  <Link to="/login" className="text-primary font-medium hover:underline">
                     Log in
                   </Link>
                 </p>

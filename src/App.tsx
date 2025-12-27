@@ -4,6 +4,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
+import { AuthProvider } from "@/hooks/useAuth";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import Search from "./pages/Search";
@@ -20,24 +22,40 @@ const queryClient = new QueryClient();
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <HelmetProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/search" element={<Search />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/register/owner" element={<RegisterOwner />} />
-            <Route path="/register/caregiver" element={<RegisterCaregiver />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/caregiver/:id" element={<CaregiverProfile />} />
-            <Route path="/dashboard/owner" element={<OwnerDashboard />} />
-            <Route path="/dashboard/caregiver" element={<CaregiverDashboard />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-      </TooltipProvider>
+      <AuthProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <Routes>
+              <Route path="/" element={<Index />} />
+              <Route path="/search" element={<Search />} />
+              <Route path="/register" element={<Register />} />
+              <Route path="/register/owner" element={<RegisterOwner />} />
+              <Route path="/register/caregiver" element={<RegisterCaregiver />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/caregiver/:id" element={<CaregiverProfile />} />
+              <Route 
+                path="/dashboard/owner" 
+                element={
+                  <ProtectedRoute allowedRoles={['owner']}>
+                    <OwnerDashboard />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/dashboard/caregiver" 
+                element={
+                  <ProtectedRoute allowedRoles={['caregiver']}>
+                    <CaregiverDashboard />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </BrowserRouter>
+        </TooltipProvider>
+      </AuthProvider>
     </HelmetProvider>
   </QueryClientProvider>
 );
