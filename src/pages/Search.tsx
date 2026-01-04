@@ -1,112 +1,36 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Helmet } from "react-helmet-async";
 import { Link } from "react-router-dom";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
+import { supabase } from "@/integrations/supabase/client";
 import { 
   Search as SearchIcon, 
   MapPin, 
   Star, 
   Shield, 
   Heart,
-  Filter,
   SlidersHorizontal,
-  X
+  X,
+  Loader2
 } from "lucide-react";
 
-const caregivers = [
-  {
-    id: 1,
-    name: "Priya Sharma",
-    image: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&h=400&fit=crop",
-    rating: 4.9,
-    reviews: 127,
-    location: "Andheri West, Mumbai",
-    services: ["Dog Walking", "Pet Sitting", "Overnight Care"],
-    price: 300,
-    priceUnit: "per walk",
-    verified: true,
-    experience: "5 years",
-    responseTime: "< 1 hour",
-    bio: "Certified pet care specialist with a passion for dogs. I treat every pet like my own family member.",
-  },
-  {
-    id: 2,
-    name: "Rahul Verma",
-    image: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop",
-    rating: 4.8,
-    reviews: 89,
-    location: "Connaught Place, Delhi",
-    services: ["Grooming", "Training", "Medical Care"],
-    price: 500,
-    priceUnit: "per session",
-    verified: true,
-    experience: "7 years",
-    responseTime: "< 2 hours",
-    bio: "Professional groomer and trainer with experience in handling all breeds.",
-  },
-  {
-    id: 3,
-    name: "Ananya Patel",
-    image: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400&h=400&fit=crop",
-    rating: 5.0,
-    reviews: 64,
-    location: "Koramangala, Bangalore",
-    services: ["Overnight Care", "Pet Sitting", "Dog Walking"],
-    price: 800,
-    priceUnit: "per night",
-    verified: true,
-    experience: "3 years",
-    responseTime: "< 30 mins",
-    bio: "Your pet's home away from home. I provide loving care and plenty of cuddles!",
-  },
-  {
-    id: 4,
-    name: "Vikram Singh",
-    image: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400&h=400&fit=crop",
-    rating: 4.7,
-    reviews: 156,
-    location: "Kothrud, Pune",
-    services: ["Dog Walking", "Training"],
-    price: 350,
-    priceUnit: "per walk",
-    verified: true,
-    experience: "8 years",
-    responseTime: "< 1 hour",
-    bio: "Experienced dog trainer specializing in obedience and behavioral training.",
-  },
-  {
-    id: 5,
-    name: "Meera Iyer",
-    image: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&h=400&fit=crop",
-    rating: 4.9,
-    reviews: 98,
-    location: "Bandra, Mumbai",
-    services: ["Cat Sitting", "Pet Sitting", "Medical Care"],
-    price: 400,
-    priceUnit: "per visit",
-    verified: true,
-    experience: "4 years",
-    responseTime: "< 45 mins",
-    bio: "Cat lover and expert in feline care. Also experienced with small pets and birds.",
-  },
-  {
-    id: 6,
-    name: "Aditya Kumar",
-    image: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&h=400&fit=crop",
-    rating: 4.6,
-    reviews: 72,
-    location: "Whitefield, Bangalore",
-    services: ["Dog Walking", "Pet Taxi", "Training"],
-    price: 250,
-    priceUnit: "per walk",
-    verified: false,
-    experience: "2 years",
-    responseTime: "< 2 hours",
-    bio: "Energetic and reliable dog walker. I ensure every walk is an adventure!",
-  },
-];
+interface Caregiver {
+  id: string;
+  user_id: string;
+  name: string;
+  image: string;
+  rating: number;
+  reviews: number;
+  location: string;
+  services: string[];
+  price: number;
+  priceUnit: string;
+  verified: boolean;
+  experience: string;
+  bio: string;
+}
 
 const services = [
   "All Services",
@@ -119,18 +43,160 @@ const services = [
   "Pet Taxi",
 ];
 
+// Fallback mock data for when no real caregivers exist
+const mockCaregivers: Caregiver[] = [
+  {
+    id: "mock-1",
+    user_id: "mock-1",
+    name: "Priya Sharma",
+    image: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&h=400&fit=crop",
+    rating: 4.9,
+    reviews: 127,
+    location: "Andheri West, Mumbai",
+    services: ["Dog Walking", "Pet Sitting", "Overnight Care"],
+    price: 300,
+    priceUnit: "per walk",
+    verified: true,
+    experience: "5 years",
+    bio: "Certified pet care specialist with a passion for dogs.",
+  },
+  {
+    id: "mock-2",
+    user_id: "mock-2",
+    name: "Rahul Verma",
+    image: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop",
+    rating: 4.8,
+    reviews: 89,
+    location: "Connaught Place, Delhi",
+    services: ["Grooming", "Training", "Medical Care"],
+    price: 500,
+    priceUnit: "per session",
+    verified: true,
+    experience: "7 years",
+    bio: "Professional groomer and trainer with experience in handling all breeds.",
+  },
+  {
+    id: "mock-3",
+    user_id: "mock-3",
+    name: "Ananya Patel",
+    image: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400&h=400&fit=crop",
+    rating: 5.0,
+    reviews: 64,
+    location: "Koramangala, Bangalore",
+    services: ["Overnight Care", "Pet Sitting", "Dog Walking"],
+    price: 800,
+    priceUnit: "per night",
+    verified: true,
+    experience: "3 years",
+    bio: "Your pet's home away from home. I provide loving care and plenty of cuddles!",
+  },
+  {
+    id: "mock-4",
+    user_id: "mock-4",
+    name: "Vikram Singh",
+    image: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400&h=400&fit=crop",
+    rating: 4.7,
+    reviews: 156,
+    location: "Kothrud, Pune",
+    services: ["Dog Walking", "Training"],
+    price: 350,
+    priceUnit: "per walk",
+    verified: true,
+    experience: "8 years",
+    bio: "Experienced dog trainer specializing in obedience and behavioral training.",
+  },
+  {
+    id: "mock-5",
+    user_id: "mock-5",
+    name: "Meera Iyer",
+    image: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&h=400&fit=crop",
+    rating: 4.9,
+    reviews: 98,
+    location: "Bandra, Mumbai",
+    services: ["Cat Sitting", "Pet Sitting", "Medical Care"],
+    price: 400,
+    priceUnit: "per visit",
+    verified: true,
+    experience: "4 years",
+    bio: "Cat lover and expert in feline care. Also experienced with small pets and birds.",
+  },
+  {
+    id: "mock-6",
+    user_id: "mock-6",
+    name: "Aditya Kumar",
+    image: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&h=400&fit=crop",
+    rating: 4.6,
+    reviews: 72,
+    location: "Whitefield, Bangalore",
+    services: ["Dog Walking", "Pet Taxi", "Training"],
+    price: 250,
+    priceUnit: "per walk",
+    verified: false,
+    experience: "2 years",
+    bio: "Energetic and reliable dog walker. I ensure every walk is an adventure!",
+  },
+];
+
 const Search = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedService, setSelectedService] = useState("All Services");
   const [showFilters, setShowFilters] = useState(false);
   const [priceRange, setPriceRange] = useState([0, 2000]);
   const [verifiedOnly, setVerifiedOnly] = useState(false);
+  const [caregivers, setCaregivers] = useState<Caregiver[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchCaregivers = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("caregiver_profiles")
+          .select(`
+            *,
+            profile:profiles(id, full_name, avatar_url, city, pincode)
+          `)
+          .order("rating", { ascending: false });
+
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+          const mappedCaregivers: Caregiver[] = data.map((item: any) => ({
+            id: item.id,
+            user_id: item.user_id,
+            name: item.profile?.full_name || "Caregiver",
+            image: item.profile?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(item.profile?.full_name || "C")}&background=random`,
+            rating: item.rating || 0,
+            reviews: item.total_reviews || 0,
+            location: item.profile?.city ? `${item.profile.city}${item.profile.pincode ? `, ${item.profile.pincode}` : ""}` : "Location not set",
+            services: item.services_offered || ["Pet Care"],
+            price: item.hourly_rate || 300,
+            priceUnit: "per session",
+            verified: item.is_verified || false,
+            experience: item.years_experience ? `${item.years_experience} years` : "New",
+            bio: item.bio || "Experienced pet caregiver ready to help!",
+          }));
+          setCaregivers(mappedCaregivers);
+        } else {
+          // Use mock data if no real caregivers exist
+          setCaregivers(mockCaregivers);
+        }
+      } catch (err) {
+        console.error("Error fetching caregivers:", err);
+        // Fallback to mock data on error
+        setCaregivers(mockCaregivers);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCaregivers();
+  }, []);
 
   const filteredCaregivers = caregivers.filter((caregiver) => {
     const matchesSearch = caregiver.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       caregiver.location.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesService = selectedService === "All Services" || 
-      caregiver.services.includes(selectedService);
+      caregiver.services.some(s => s.toLowerCase().includes(selectedService.toLowerCase()));
     const matchesPrice = caregiver.price >= priceRange[0] && caregiver.price <= priceRange[1];
     const matchesVerified = !verifiedOnly || caregiver.verified;
     
@@ -211,7 +277,7 @@ const Search = () => {
                           <input
                             type="number"
                             value={priceRange[0]}
-                            onChange={(e) => setPriceRange([parseInt(e.target.value), priceRange[1]])}
+                            onChange={(e) => setPriceRange([parseInt(e.target.value) || 0, priceRange[1]])}
                             className="w-full h-10 px-3 rounded-lg bg-muted/50 border border-border text-sm"
                             placeholder="Min"
                           />
@@ -219,7 +285,7 @@ const Search = () => {
                           <input
                             type="number"
                             value={priceRange[1]}
-                            onChange={(e) => setPriceRange([priceRange[0], parseInt(e.target.value)])}
+                            onChange={(e) => setPriceRange([priceRange[0], parseInt(e.target.value) || 2000])}
                             className="w-full h-10 px-3 rounded-lg bg-muted/50 border border-border text-sm"
                             placeholder="Max"
                           />
@@ -275,79 +341,85 @@ const Search = () => {
                 </select>
               </div>
 
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredCaregivers.map((caregiver) => (
-                  <Link
-                    key={caregiver.id}
-                    to={`/caregiver/${caregiver.id}`}
-                    className="group bg-card rounded-2xl border border-border overflow-hidden hover:shadow-medium hover:border-primary/30 transition-all duration-300"
-                  >
-                    <div className="flex gap-4 p-4">
-                      <div className="relative">
-                        <img
-                          src={caregiver.image}
-                          alt={caregiver.name}
-                          className="w-24 h-24 rounded-xl object-cover"
-                        />
-                        {caregiver.verified && (
-                          <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-secondary rounded-full flex items-center justify-center">
-                            <Shield className="w-3 h-3 text-secondary-foreground" />
+              {loading ? (
+                <div className="flex items-center justify-center py-16">
+                  <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                </div>
+              ) : (
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {filteredCaregivers.map((caregiver) => (
+                    <Link
+                      key={caregiver.id}
+                      to={`/caregiver/${caregiver.id}`}
+                      className="group bg-card rounded-2xl border border-border overflow-hidden hover:shadow-medium hover:border-primary/30 transition-all duration-300"
+                    >
+                      <div className="flex gap-4 p-4">
+                        <div className="relative">
+                          <img
+                            src={caregiver.image}
+                            alt={caregiver.name}
+                            className="w-24 h-24 rounded-xl object-cover"
+                          />
+                          {caregiver.verified && (
+                            <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-secondary rounded-full flex items-center justify-center">
+                              <Shield className="w-3 h-3 text-secondary-foreground" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-2">
+                            <h3 className="font-semibold group-hover:text-primary transition-colors truncate">
+                              {caregiver.name}
+                            </h3>
+                            <button 
+                              className="shrink-0 w-8 h-8 rounded-full bg-muted flex items-center justify-center hover:bg-primary/10 transition-colors"
+                              onClick={(e) => e.preventDefault()}
+                            >
+                              <Heart className="w-4 h-4 text-muted-foreground" />
+                            </button>
                           </div>
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-2">
-                          <h3 className="font-semibold group-hover:text-primary transition-colors truncate">
-                            {caregiver.name}
-                          </h3>
-                          <button 
-                            className="shrink-0 w-8 h-8 rounded-full bg-muted flex items-center justify-center hover:bg-primary/10 transition-colors"
-                            onClick={(e) => e.preventDefault()}
-                          >
-                            <Heart className="w-4 h-4 text-muted-foreground" />
-                          </button>
-                        </div>
-                        <div className="flex items-center gap-1 text-sm">
-                          <Star className="w-4 h-4 text-accent fill-accent" />
-                          <span className="font-semibold">{caregiver.rating}</span>
-                          <span className="text-muted-foreground">({caregiver.reviews})</span>
-                        </div>
-                        <div className="flex items-center gap-1 text-sm text-muted-foreground mt-1">
-                          <MapPin className="w-3 h-3" />
-                          <span className="truncate">{caregiver.location}</span>
+                          <div className="flex items-center gap-1 text-sm">
+                            <Star className="w-4 h-4 text-accent fill-accent" />
+                            <span className="font-semibold">{caregiver.rating || "New"}</span>
+                            <span className="text-muted-foreground">({caregiver.reviews})</span>
+                          </div>
+                          <div className="flex items-center gap-1 text-sm text-muted-foreground mt-1">
+                            <MapPin className="w-3 h-3" />
+                            <span className="truncate">{caregiver.location}</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    <div className="px-4 pb-4">
-                      <p className="text-sm text-muted-foreground line-clamp-2 mb-3">
-                        {caregiver.bio}
-                      </p>
-                      <div className="flex flex-wrap gap-1 mb-3">
-                        {caregiver.services.slice(0, 3).map((service) => (
-                          <span
-                            key={service}
-                            className="px-2 py-0.5 bg-muted rounded-full text-xs text-muted-foreground"
-                          >
-                            {service}
-                          </span>
-                        ))}
-                      </div>
-                      <div className="flex items-center justify-between pt-3 border-t border-border">
-                        <div className="text-sm text-muted-foreground">
-                          <span className="text-foreground font-medium">{caregiver.experience}</span> exp
+                      <div className="px-4 pb-4">
+                        <p className="text-sm text-muted-foreground line-clamp-2 mb-3">
+                          {caregiver.bio}
+                        </p>
+                        <div className="flex flex-wrap gap-1 mb-3">
+                          {caregiver.services.slice(0, 3).map((service) => (
+                            <span
+                              key={service}
+                              className="px-2 py-0.5 bg-muted rounded-full text-xs text-muted-foreground"
+                            >
+                              {service}
+                            </span>
+                          ))}
                         </div>
-                        <div className="text-right">
-                          <span className="font-bold text-primary">₹{caregiver.price}</span>
-                          <span className="text-sm text-muted-foreground"> {caregiver.priceUnit}</span>
+                        <div className="flex items-center justify-between pt-3 border-t border-border">
+                          <div className="text-sm text-muted-foreground">
+                            <span className="text-foreground font-medium">{caregiver.experience}</span> exp
+                          </div>
+                          <div className="text-right">
+                            <span className="font-bold text-primary">₹{caregiver.price}</span>
+                            <span className="text-sm text-muted-foreground"> {caregiver.priceUnit}</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </Link>
-                ))}
-              </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
 
-              {filteredCaregivers.length === 0 && (
+              {!loading && filteredCaregivers.length === 0 && (
                 <div className="text-center py-16">
                   <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-muted flex items-center justify-center">
                     <SearchIcon className="w-8 h-8 text-muted-foreground" />
