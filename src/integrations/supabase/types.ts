@@ -14,6 +14,79 @@ export type Database = {
   }
   public: {
     Tables: {
+      bookings: {
+        Row: {
+          caregiver_id: string
+          caregiver_notes: string | null
+          created_at: string
+          end_date: string
+          id: string
+          notes: string | null
+          owner_id: string
+          owner_notes: string | null
+          pet_id: string
+          service_type: string
+          start_date: string
+          status: string
+          total_amount: number
+          updated_at: string
+        }
+        Insert: {
+          caregiver_id: string
+          caregiver_notes?: string | null
+          created_at?: string
+          end_date: string
+          id?: string
+          notes?: string | null
+          owner_id: string
+          owner_notes?: string | null
+          pet_id: string
+          service_type: string
+          start_date: string
+          status?: string
+          total_amount?: number
+          updated_at?: string
+        }
+        Update: {
+          caregiver_id?: string
+          caregiver_notes?: string | null
+          created_at?: string
+          end_date?: string
+          id?: string
+          notes?: string | null
+          owner_id?: string
+          owner_notes?: string | null
+          pet_id?: string
+          service_type?: string
+          start_date?: string
+          status?: string
+          total_amount?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_bookings_caregiver"
+            columns: ["caregiver_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_bookings_owner"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_bookings_pet"
+            columns: ["pet_id"]
+            isOneToOne: false
+            referencedRelation: "pets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       caregiver_profiles: {
         Row: {
           availability: Json | null
