@@ -1,45 +1,54 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { Link, useNavigate } from "react-router-dom";
-import Navbar from "@/components/layout/Navbar";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
 import { Button } from "@/components/ui/button";
-import { PawPrint, Mail, Lock, ArrowRight, Loader2 } from "lucide-react";
+import { PawPrint, Mail, Lock, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+
+const loginSchema = z.object({
+  email: z.string().email("Invalid email address"),
+  password: z.string().min(1, "Password is required"),
+  remember: z.boolean().default(false),
+});
+
+type LoginFormValues = z.infer<typeof loginSchema>;
 
 const Login = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState({
-    email: "",
-    password: "",
-    remember: false,
+
+  const form = useForm<LoginFormValues>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: {
+      email: "",
+      password: "",
+      remember: false,
+    },
   });
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value, type, checked } = e.target;
-    setFormData({ 
-      ...formData, 
-      [name]: type === "checkbox" ? checked : value 
-    });
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!formData.email || !formData.password) {
-      toast.error("Please enter both email and password");
-      return;
-    }
-
+  const onSubmit = async (values: LoginFormValues) => {
     setLoading(true);
 
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
-        email: formData.email,
-        password: formData.password,
+        email: values.email,
+        password: values.password,
       });
-      
+
       if (error) {
         if (error.message.includes("Invalid login credentials")) {
           toast.error("Invalid email or password. Please try again.");
@@ -61,7 +70,7 @@ const Login = () => {
           .single();
 
         toast.success("Welcome back!");
-        
+
         if (roleData?.role === 'caregiver') {
           navigate("/dashboard/caregiver");
         } else {
@@ -81,10 +90,8 @@ const Login = () => {
         <title>Log In to PetPals - Access Your Account</title>
         <meta name="description" content="Log in to your PetPals account. Manage your bookings, connect with caregivers, and access pet care services." />
       </Helmet>
-      
-      <div className="min-h-screen bg-background">
-        <Navbar />
-        
+
+      <div className="bg-background">
         <main className="pt-24 pb-16">
           <div className="container mx-auto px-4">
             <div className="max-w-md mx-auto">
@@ -101,69 +108,90 @@ const Login = () => {
 
               {/* Form */}
               <div className="bg-card rounded-2xl border border-border p-6 md:p-8 shadow-soft">
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div>
-                    <label className="text-sm font-medium mb-1 block">Email</label>
-                    <div className="relative">
-                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                      <input
-                        type="email"
-                        name="email"
-                        value={formData.email}
-                        onChange={handleInputChange}
-                        placeholder="you@example.com"
-                        className="w-full h-12 pl-10 pr-4 rounded-xl bg-muted/50 border border-border focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all"
-                        required
-                      />
-                    </div>
-                  </div>
+                <Form {...form}>
+                  <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                    <FormField
+                      control={form.control}
+                      name="email"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Email</FormLabel>
+                          <FormControl>
+                            <div className="relative">
+                              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                              <Input
+                                {...field}
+                                type="email"
+                                placeholder="you@example.com"
+                                className="pl-10 h-12 rounded-xl bg-muted/50 border-input"
+                              />
+                            </div>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                  <div>
-                    <label className="text-sm font-medium mb-1 block">Password</label>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                      <input
-                        type="password"
-                        name="password"
-                        value={formData.password}
-                        onChange={handleInputChange}
-                        placeholder="••••••••"
-                        className="w-full h-12 pl-10 pr-4 rounded-xl bg-muted/50 border border-border focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all"
-                        required
-                      />
-                    </div>
-                  </div>
+                    <FormField
+                      control={form.control}
+                      name="password"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Password</FormLabel>
+                          <FormControl>
+                            <div className="relative">
+                              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                              <Input
+                                {...field}
+                                type="password"
+                                placeholder="••••••••"
+                                className="pl-10 h-12 rounded-xl bg-muted/50 border-input"
+                              />
+                            </div>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                  <div className="flex items-center justify-between">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
+                    <div className="flex items-center justify-between">
+                      <FormField
+                        control={form.control}
                         name="remember"
-                        checked={formData.remember}
-                        onChange={handleInputChange}
-                        className="w-4 h-4 rounded border-border text-primary focus:ring-primary"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-row items-center space-x-2 space-y-0">
+                            <FormControl>
+                              <Checkbox
+                                checked={field.value}
+                                onCheckedChange={field.onChange}
+                              />
+                            </FormControl>
+                            <FormLabel className="text-sm font-normal text-muted-foreground cursor-pointer">
+                              Remember me
+                            </FormLabel>
+                          </FormItem>
+                        )}
                       />
-                      <span className="text-sm text-muted-foreground">Remember me</span>
-                    </label>
-                    <Link 
-                      to="/forgot-password" 
-                      className="text-sm text-primary hover:underline"
-                    >
-                      Forgot password?
-                    </Link>
-                  </div>
+                      <Link
+                        to="/forgot-password"
+                        className="text-sm text-primary hover:underline"
+                      >
+                        Forgot password?
+                      </Link>
+                    </div>
 
-                  <Button 
-                    type="submit" 
-                    variant="hero" 
-                    size="lg" 
-                    className="w-full gap-2"
-                    disabled={loading}
-                  >
-                    {loading ? "Signing in..." : "Log In"}
-                    {!loading && <ArrowRight className="w-4 h-4" />}
-                  </Button>
-                </form>
+                    <Button
+                      type="submit"
+                      variant="hero"
+                      size="lg"
+                      className="w-full gap-2"
+                      disabled={loading}
+                    >
+                      {loading ? "Signing in..." : "Log In"}
+                      {!loading && <ArrowRight className="w-4 h-4" />}
+                    </Button>
+                  </form>
+                </Form>
 
                 {/* Sign up link */}
                 <p className="text-center text-muted-foreground mt-6">

@@ -43,15 +43,13 @@ const Register = () => {
     <>
       <Helmet>
         <title>Sign Up - Join PetPals as Pet Owner or Caregiver</title>
-        <meta 
-          name="description" 
-          content="Create your free PetPals account. Sign up as a pet owner to find trusted caregivers, or join as a caregiver to start earning." 
+        <meta
+          name="description"
+          content="Create your free PetPals account. Sign up as a pet owner to find trusted caregivers, or join as a caregiver to start earning."
         />
       </Helmet>
-      
-      <div className="min-h-screen bg-background">
-        <Navbar />
-        
+
+      <div className="bg-background">
         <main className="pt-24 pb-16">
           <div className="container mx-auto px-4">
             <div className="max-w-4xl mx-auto">
@@ -74,11 +72,10 @@ const Register = () => {
                   <div
                     key={role.id}
                     onClick={() => setSelectedRole(role.id)}
-                    className={`relative p-6 rounded-2xl border-2 cursor-pointer transition-all duration-300 ${
-                      selectedRole === role.id
+                    className={`relative p-6 rounded-2xl border-2 cursor-pointer transition-all duration-300 ${selectedRole === role.id
                         ? "border-primary bg-primary/5 shadow-medium"
                         : "border-border hover:border-primary/30 hover:shadow-soft"
-                    }`}
+                      }`}
                   >
                     {/* Selected indicator */}
                     {selectedRole === role.id && (
@@ -88,9 +85,8 @@ const Register = () => {
                     )}
 
                     {/* Icon */}
-                    <div className={`w-14 h-14 rounded-xl mb-4 flex items-center justify-center ${
-                      role.id === "owner" ? "bg-primary/10 text-primary" : "bg-secondary/10 text-secondary"
-                    }`}>
+                    <div className={`w-14 h-14 rounded-xl mb-4 flex items-center justify-center ${role.id === "owner" ? "bg-primary/10 text-primary" : "bg-secondary/10 text-secondary"
+                      }`}>
                       <role.icon className="w-7 h-7" />
                     </div>
 
@@ -111,7 +107,7 @@ const Register = () => {
                     </ul>
 
                     {/* CTA */}
-                    <Button 
+                    <Button
                       variant={selectedRole === role.id ? "default" : "outline"}
                       className="w-full"
                       asChild

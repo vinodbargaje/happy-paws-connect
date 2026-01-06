@@ -1,16 +1,28 @@
 import { useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { Link, useNavigate } from "react-router-dom";
-import Navbar from "@/components/layout/Navbar";
+import { useForm, useFieldArray } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { 
-  PawPrint, 
-  ArrowRight, 
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import {
+  PawPrint,
+  ArrowRight,
   ArrowLeft,
-  Mail, 
-  Lock, 
-  User, 
-  Phone, 
+  Mail,
+  Lock,
+  User,
+  Phone,
   MapPin,
   Plus,
   X,
@@ -21,41 +33,78 @@ import {
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import ProfilePhotoUpload from "@/components/ProfilePhotoUpload";
 
-type PetType = "dog" | "cat" | "bird" | "rabbit" | "other";
+// --- Zod Schema ---
+const petSchema = z.object({
+  name: z.string().min(1, "Pet name is required"),
+  type: z.enum(["dog", "cat", "bird", "rabbit", "other"]),
+  breed: z.string().min(1, "Breed is required"),
+  age: z.string().optional(),
+  weight: z.string().optional(),
+  gender: z.enum(["male", "female"]),
+  specialNeeds: z.string().optional(),
+});
 
-interface Pet {
-  id: string;
-  name: string;
-  type: PetType;
-  breed: string;
-  age: string;
-  weight: string;
-  gender: "male" | "female";
-  specialNeeds: string;
-}
+const registerOwnerSchema = z.object({
+  firstName: z.string().min(2, "First name must be at least 2 characters"),
+  lastName: z.string().min(2, "Last name must be at least 2 characters"),
+  email: z.string().email("Invalid email address"),
+  phone: z.string().min(10, "Phone number must be at least 10 digits"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+  confirmPassword: z.string(),
+  city: z.string().min(2, "City is required"),
+  pincode: z.string().length(6, "Pincode must be 6 digits"),
+  accountType: z.enum(["free", "paid"]),
+  avatarUrl: z.string().optional(),
+  pets: z.array(petSchema).min(1, "Please add at least one pet"),
+}).refine((data) => data.password === data.confirmPassword, {
+  message: "Passwords do not match",
+  path: ["confirmPassword"],
+});
+
+type RegisterOwnerFormValues = z.infer<typeof registerOwnerSchema>;
 
 const RegisterOwner = () => {
   const navigate = useNavigate();
   const { signUp } = useAuth();
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(1);
-  const [formData, setFormData] = useState({
-    firstName: "",
-    lastName: "",
-    email: "",
-    phone: "",
-    password: "",
-    confirmPassword: "",
-    city: "",
-    pincode: "",
-    accountType: "free" as "free" | "paid",
-  });
-  const [pets, setPets] = useState<Pet[]>([]);
   const [showPetForm, setShowPetForm] = useState(false);
-  const [currentPet, setCurrentPet] = useState<Partial<Pet>>({
+
+  // --- Form Setup ---
+  const form = useForm<RegisterOwnerFormValues>({
+    resolver: zodResolver(registerOwnerSchema),
+    defaultValues: {
+      firstName: "",
+      lastName: "",
+      email: "",
+      phone: "",
+      password: "",
+      confirmPassword: "",
+      city: "",
+      pincode: "",
+      accountType: "free",
+      avatarUrl: "",
+      pets: [],
+    },
+    mode: "onChange",
+  });
+
+  const { fields, append, remove } = useFieldArray({
+    control: form.control,
+    name: "pets",
+  });
+
+  // Temporary state for the "Add Pet" modal/form section before appending to react-hook-form array
+  const [tempPet, setTempPet] = useState<z.infer<typeof petSchema>>({
+    name: "",
     type: "dog",
+    breed: "",
+    age: "",
+    weight: "",
     gender: "male",
+    specialNeeds: "",
   });
 
   const petTypes = [
@@ -64,491 +113,510 @@ const RegisterOwner = () => {
     { id: "bird", label: "Bird", icon: Bird },
     { id: "rabbit", label: "Rabbit", icon: PawPrint },
     { id: "other", label: "Other", icon: PawPrint },
-  ];
+  ] as const;
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
-
-  const handlePetInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    setCurrentPet({ ...currentPet, [e.target.name]: e.target.value });
-  };
-
-  const addPet = () => {
-    if (!currentPet.name || !currentPet.breed) {
+  // --- Handlers ---
+  const handleAddPet = () => {
+    if (!tempPet.name || !tempPet.breed) {
       toast.error("Please fill in pet name and breed");
       return;
     }
-    const newPet: Pet = {
-      id: Date.now().toString(),
-      name: currentPet.name || "",
-      type: (currentPet.type as PetType) || "dog",
-      breed: currentPet.breed || "",
-      age: currentPet.age || "",
-      weight: currentPet.weight || "",
-      gender: (currentPet.gender as "male" | "female") || "male",
-      specialNeeds: currentPet.specialNeeds || "",
-    };
-    setPets([...pets, newPet]);
-    setCurrentPet({ type: "dog", gender: "male" });
+    append(tempPet);
+    setTempPet({
+      name: "",
+      type: "dog",
+      breed: "",
+      age: "",
+      weight: "",
+      gender: "male",
+      specialNeeds: "",
+    });
     setShowPetForm(false);
-    toast.success(`${newPet.name} added!`);
+    toast.success("Pet added!");
   };
 
-  const removePet = (id: string) => {
-    setPets(pets.filter((p) => p.id !== id));
+  const handleNextStep = async () => {
+    let isValid = false;
+    if (step === 1) {
+      isValid = await form.trigger(["firstName", "lastName", "email", "phone", "password", "confirmPassword"]);
+    } else if (step === 2) {
+      isValid = await form.trigger(["city", "pincode", "accountType"]);
+    }
+
+    if (isValid) {
+      setStep((prev) => prev + 1);
+    }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (step < 3) {
-      setStep(step + 1);
-      return;
-    }
-
-    if (formData.password !== formData.confirmPassword) {
-      toast.error("Passwords do not match");
-      return;
-    }
-
+  const onSubmit = async (data: RegisterOwnerFormValues) => {
     setLoading(true);
 
-    const { error } = await signUp(formData.email, formData.password, {
-      full_name: `${formData.firstName} ${formData.lastName}`,
-      phone: formData.phone,
-      role: 'owner',
-    });
+    try {
+      const { error } = await signUp(data.email, data.password, {
+        full_name: `${data.firstName} ${data.lastName}`,
+        phone: data.phone,
+        role: 'owner',
+      });
 
-    if (error) {
-      toast.error(error.message || "Failed to create account");
-      setLoading(false);
-      return;
-    }
-
-    // Update profile with city and pincode
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      await supabase
-        .from('profiles')
-        .update({ city: formData.city, pincode: formData.pincode })
-        .eq('id', user.id);
-
-      // Add pets
-      for (const pet of pets) {
-        await supabase.from('pets').insert({
-          owner_id: user.id,
-          name: pet.name,
-          pet_type: pet.type,
-          breed: pet.breed,
-          age: pet.age ? parseInt(pet.age) : null,
-          weight: pet.weight ? parseFloat(pet.weight) : null,
-          sex: pet.gender,
-          special_needs: pet.specialNeeds || null,
-        });
+      if (error) {
+        toast.error(error.message || "Failed to create account");
+        setLoading(false);
+        return;
       }
-    }
 
-    toast.success("Account created successfully!");
-    navigate("/dashboard/owner");
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        // Update profile location
+        await supabase
+          .from('profiles')
+          .update({
+            city: data.city,
+            pincode: data.pincode,
+            avatar_url: data.avatarUrl,
+          })
+          .eq('id', user.id);
+
+        // Add pets
+        for (const pet of data.pets) {
+          await supabase.from('pets').insert({
+            owner_id: user.id,
+            name: pet.name,
+            pet_type: pet.type,
+            breed: pet.breed,
+            age: pet.age ? parseInt(pet.age) : null,
+            weight: pet.weight ? parseFloat(pet.weight) : null,
+            sex: pet.gender,
+            special_needs: pet.specialNeeds || null,
+          });
+        }
+      }
+
+      toast.success("Account created successfully!");
+      navigate("/dashboard/owner");
+    } catch (err: any) {
+      console.error(err);
+      toast.error("An unexpected error occurred");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const validateStep = () => {
-    if (step === 1) {
-      return formData.firstName && formData.lastName && formData.email && formData.phone && formData.password;
-    }
-    if (step === 2) {
-      return formData.city && formData.pincode;
-    }
-    return true;
+  // --- Animation Variants ---
+  const variants = {
+    enter: (direction: number) => ({
+      x: direction > 0 ? 50 : -50,
+      opacity: 0,
+    }),
+    center: {
+      x: 0,
+      opacity: 1,
+    },
+    exit: (direction: number) => ({
+      x: direction < 0 ? 50 : -50,
+      opacity: 0,
+    }),
   };
 
   return (
     <>
       <Helmet>
         <title>Sign Up as Pet Owner - Create Your Account | PetPals</title>
-        <meta name="description" content="Create your free pet owner account on PetPals. Add your pets and start finding trusted caregivers today." />
       </Helmet>
-      
-      <div className="min-h-screen bg-background">
-        <Navbar />
-        
-        <main className="pt-24 pb-16">
-          <div className="container mx-auto px-4">
-            <div className="max-w-xl mx-auto">
-              {/* Progress */}
-              <div className="mb-8">
-                <div className="flex items-center justify-between mb-2">
-                  {[1, 2, 3].map((s) => (
+
+      {/* We assume Navbar is in MainLayout, or we keep it here if not using MainLayout fully yet. 
+            For this file, I'll remove Navbar since we added MainLayout in App.tsx 
+        */}
+
+      <div className="pt-24 pb-16 min-h-[calc(100vh-4rem)]">
+        <div className="container mx-auto px-4">
+          <div className="max-w-xl mx-auto">
+            {/* Progress */}
+            <div className="mb-8">
+              <div className="flex items-center justify-between mb-2">
+                {[1, 2, 3].map((s) => (
+                  <div key={s} className={`flex items-center ${s < 3 ? "flex-1" : ""}`}>
                     <div
-                      key={s}
-                      className={`flex items-center ${s < 3 ? "flex-1" : ""}`}
-                    >
-                      <div
-                        className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold ${
-                          s <= step
-                            ? "gradient-primary text-primary-foreground"
-                            : "bg-muted text-muted-foreground"
+                      className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold transition-colors duration-300 ${s <= step
+                        ? "gradient-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground"
                         }`}
-                      >
-                        {s}
-                      </div>
-                      {s < 3 && (
-                        <div
-                          className={`flex-1 h-1 mx-2 rounded ${
-                            s < step ? "bg-primary" : "bg-muted"
+                    >
+                      {s}
+                    </div>
+                    {s < 3 && (
+                      <div
+                        className={`flex-1 h-1 mx-2 rounded transition-colors duration-300 ${s < step ? "bg-primary" : "bg-muted"
                           }`}
-                        />
-                      )}
-                    </div>
-                  ))}
-                </div>
-                <div className="flex justify-between text-sm text-muted-foreground">
-                  <span>Account</span>
-                  <span>Location</span>
-                  <span>Pets</span>
-                </div>
+                      />
+                    )}
+                  </div>
+                ))}
               </div>
+              <div className="flex justify-between text-sm text-muted-foreground">
+                <span>Account</span>
+                <span>Location</span>
+                <span>Pets</span>
+              </div>
+            </div>
 
-              {/* Form */}
-              <div className="bg-card rounded-2xl border border-border p-6 md:p-8 shadow-soft">
-                <form onSubmit={handleSubmit}>
-                  {/* Step 1: Account Info */}
-                  {step === 1 && (
-                    <div className="space-y-4 animate-slide-up">
-                      <div className="text-center mb-6">
-                        <h1 className="text-2xl font-bold mb-2">Create Your Account</h1>
-                        <p className="text-muted-foreground">Let's get you set up as a pet owner</p>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="text-sm font-medium mb-1 block">First Name</label>
-                          <div className="relative">
-                            <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                            <input
-                              type="text"
-                              name="firstName"
-                              value={formData.firstName}
-                              onChange={handleInputChange}
-                              placeholder="John"
-                              className="w-full h-12 pl-10 pr-4 rounded-xl bg-muted/50 border border-border focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none"
-                              required
-                            />
-                          </div>
+            <div className="bg-card rounded-2xl border border-border p-6 md:p-8 shadow-soft overflow-hidden">
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)}>
+                  <AnimatePresence mode="wait" initial={false} custom={step}>
+                    {step === 1 && (
+                      <motion.div
+                        key="step1"
+                        custom={step}
+                        variants={variants}
+                        initial="enter"
+                        animate="center"
+                        exit="exit"
+                        transition={{ duration: 0.3 }}
+                        className="space-y-4"
+                      >
+                        <div className="text-center mb-6">
+                          <h1 className="text-2xl font-bold mb-2">Create Your Account</h1>
+                          <p className="text-muted-foreground">Let's get you set up as a pet owner</p>
                         </div>
-                        <div>
-                          <label className="text-sm font-medium mb-1 block">Last Name</label>
-                          <input
-                            type="text"
-                            name="lastName"
-                            value={formData.lastName}
-                            onChange={handleInputChange}
-                            placeholder="Doe"
-                            className="w-full h-12 px-4 rounded-xl bg-muted/50 border border-border focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none"
-                            required
-                          />
-                        </div>
-                      </div>
 
-                      <div>
-                        <label className="text-sm font-medium mb-1 block">Email</label>
-                        <div className="relative">
-                          <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                          <input
-                            type="email"
-                            name="email"
-                            value={formData.email}
-                            onChange={handleInputChange}
-                            placeholder="you@example.com"
-                            className="w-full h-12 pl-10 pr-4 rounded-xl bg-muted/50 border border-border focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none"
-                            required
-                          />
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="text-sm font-medium mb-1 block">Phone</label>
-                        <div className="relative">
-                          <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                          <input
-                            type="tel"
-                            name="phone"
-                            value={formData.phone}
-                            onChange={handleInputChange}
-                            placeholder="+91 98765 43210"
-                            className="w-full h-12 pl-10 pr-4 rounded-xl bg-muted/50 border border-border focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none"
-                            required
-                          />
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="text-sm font-medium mb-1 block">Password</label>
-                        <div className="relative">
-                          <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                          <input
-                            type="password"
-                            name="password"
-                            value={formData.password}
-                            onChange={handleInputChange}
-                            placeholder="••••••••"
-                            className="w-full h-12 pl-10 pr-4 rounded-xl bg-muted/50 border border-border focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none"
-                            required
-                          />
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="text-sm font-medium mb-1 block">Confirm Password</label>
-                        <div className="relative">
-                          <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                          <input
-                            type="password"
-                            name="confirmPassword"
-                            value={formData.confirmPassword}
-                            onChange={handleInputChange}
-                            placeholder="••••••••"
-                            className="w-full h-12 pl-10 pr-4 rounded-xl bg-muted/50 border border-border focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none"
-                            required
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Step 2: Location */}
-                  {step === 2 && (
-                    <div className="space-y-4 animate-slide-up">
-                      <div className="text-center mb-6">
-                        <h1 className="text-2xl font-bold mb-2">Where Are You Located?</h1>
-                        <p className="text-muted-foreground">Help us find caregivers near you</p>
-                      </div>
-
-                      <div>
-                        <label className="text-sm font-medium mb-1 block">City</label>
-                        <div className="relative">
-                          <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                          <input
-                            type="text"
-                            name="city"
-                            value={formData.city}
-                            onChange={handleInputChange}
-                            placeholder="Mumbai"
-                            className="w-full h-12 pl-10 pr-4 rounded-xl bg-muted/50 border border-border focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none"
-                            required
-                          />
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="text-sm font-medium mb-1 block">Pincode</label>
-                        <input
-                          type="text"
-                          name="pincode"
-                          value={formData.pincode}
-                          onChange={handleInputChange}
-                          placeholder="400001"
-                          className="w-full h-12 px-4 rounded-xl bg-muted/50 border border-border focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none"
-                          required
-                        />
-                      </div>
-
-                      {/* Account Type */}
-                      <div className="pt-4">
-                        <label className="text-sm font-medium mb-3 block">Account Type</label>
                         <div className="grid grid-cols-2 gap-4">
-                          <div
-                            onClick={() => setFormData({ ...formData, accountType: "free" })}
-                            className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
-                              formData.accountType === "free"
-                                ? "border-primary bg-primary/5"
-                                : "border-border hover:border-primary/30"
-                            }`}
-                          >
-                            <p className="font-semibold mb-1">Free</p>
-                            <p className="text-sm text-muted-foreground">Up to 2 connections</p>
-                          </div>
-                          <div
-                            onClick={() => setFormData({ ...formData, accountType: "paid" })}
-                            className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
-                              formData.accountType === "paid"
-                                ? "border-primary bg-primary/5"
-                                : "border-border hover:border-primary/30"
-                            }`}
-                          >
-                            <p className="font-semibold mb-1">Premium <span className="text-primary">₹299/mo</span></p>
-                            <p className="text-sm text-muted-foreground">Unlimited contacts</p>
-                          </div>
+                          <FormField
+                            control={form.control}
+                            name="firstName"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>First Name</FormLabel>
+                                <FormControl>
+                                  <div className="relative">
+                                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                                    <Input {...field} className="pl-10" placeholder="John" />
+                                  </div>
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={form.control}
+                            name="lastName"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Last Name</FormLabel>
+                                <FormControl>
+                                  <Input {...field} placeholder="Doe" />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
                         </div>
-                      </div>
-                    </div>
-                  )}
 
-                  {/* Step 3: Pets */}
-                  {step === 3 && (
-                    <div className="space-y-4 animate-slide-up">
-                      <div className="text-center mb-6">
-                        <h1 className="text-2xl font-bold mb-2">Add Your Pets</h1>
-                        <p className="text-muted-foreground">Tell us about your furry friends</p>
-                      </div>
-
-                      {/* Added Pets */}
-                      {pets.length > 0 && (
-                        <div className="space-y-3 mb-4">
-                          {pets.map((pet) => (
-                            <div
-                              key={pet.id}
-                              className="flex items-center justify-between p-4 bg-muted/50 rounded-xl"
-                            >
-                              <div className="flex items-center gap-3">
-                                <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                                  {pet.type === "dog" && <Dog className="w-6 h-6 text-primary" />}
-                                  {pet.type === "cat" && <Cat className="w-6 h-6 text-primary" />}
-                                  {pet.type === "bird" && <Bird className="w-6 h-6 text-primary" />}
-                                  {(pet.type === "rabbit" || pet.type === "other") && (
-                                    <PawPrint className="w-6 h-6 text-primary" />
-                                  )}
+                        <FormField
+                          control={form.control}
+                          name="email"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Email</FormLabel>
+                              <FormControl>
+                                <div className="relative">
+                                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                                  <Input {...field} className="pl-10" placeholder="you@example.com" type="email" />
                                 </div>
-                                <div>
-                                  <p className="font-semibold">{pet.name}</p>
-                                  <p className="text-sm text-muted-foreground">
-                                    {pet.breed} • {pet.age}
-                                  </p>
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name="phone"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Phone</FormLabel>
+                              <FormControl>
+                                <div className="relative">
+                                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                                  <Input {...field} className="pl-10" placeholder="+91 98765 43210" type="tel" />
+                                </div>
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name="password"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Password</FormLabel>
+                              <FormControl>
+                                <div className="relative">
+                                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                                  <Input {...field} className="pl-10" placeholder="••••••••" type="password" />
+                                </div>
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name="confirmPassword"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Confirm Password</FormLabel>
+                              <FormControl>
+                                <div className="relative">
+                                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                                  <Input {...field} className="pl-10" placeholder="••••••••" type="password" />
+                                </div>
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </motion.div>
+                    )}
+
+                    {step === 2 && (
+                      <motion.div
+                        key="step2"
+                        custom={step}
+                        variants={variants}
+                        initial="enter"
+                        animate="center"
+                        exit="exit"
+                        transition={{ duration: 0.3 }}
+                        className="space-y-4"
+                      >
+                        <div className="text-center mb-6">
+                          <h1 className="text-2xl font-bold mb-2">Where Are You Located?</h1>
+                          <p className="text-muted-foreground">Help us find caregivers near you</p>
+                        </div>
+
+                        <FormField
+                          control={form.control}
+                          name="city"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>City</FormLabel>
+                              <FormControl>
+                                <div className="relative">
+                                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                                  <Input {...field} className="pl-10" placeholder="Mumbai" />
+                                </div>
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name="pincode"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Pincode</FormLabel>
+                              <FormControl>
+                                <Input {...field} placeholder="400001" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name="avatarUrl"
+                          render={({ field }) => (
+                            <FormItem className="pt-2">
+                              <FormLabel>Profile Photo</FormLabel>
+                              <FormControl>
+                                <ProfilePhotoUpload
+                                  currentUrl={field.value}
+                                  onUpload={(url) => field.onChange(url)}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <div className="pt-4">
+                          <FormLabel className="mb-3 block">Account Type</FormLabel>
+                          <FormField
+                            control={form.control}
+                            name="accountType"
+                            render={({ field }) => (
+                              <div className="grid grid-cols-2 gap-4">
+                                <div
+                                  onClick={() => field.onChange("free")}
+                                  className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${field.value === "free"
+                                    ? "border-primary bg-primary/5"
+                                    : "border-border hover:border-primary/30"
+                                    }`}
+                                >
+                                  <p className="font-semibold mb-1">Free</p>
+                                  <p className="text-sm text-muted-foreground">Up to 2 connections</p>
+                                </div>
+                                <div
+                                  onClick={() => field.onChange("paid")}
+                                  className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${field.value === "paid"
+                                    ? "border-primary bg-primary/5"
+                                    : "border-border hover:border-primary/30"
+                                    }`}
+                                >
+                                  <p className="font-semibold mb-1">Premium <span className="text-primary">₹299/mo</span></p>
+                                  <p className="text-sm text-muted-foreground">Unlimited contacts</p>
                                 </div>
                               </div>
-                              <button
-                                type="button"
-                                onClick={() => removePet(pet.id)}
-                                className="w-8 h-8 rounded-full bg-destructive/10 text-destructive flex items-center justify-center hover:bg-destructive/20 transition-colors"
-                              >
-                                <X className="w-4 h-4" />
-                              </button>
-                            </div>
-                          ))}
+                            )}
+                          />
                         </div>
-                      )}
+                      </motion.div>
+                    )}
 
-                      {/* Add Pet Form */}
-                      {showPetForm ? (
-                        <div className="p-4 bg-muted/30 rounded-xl space-y-4">
-                          <div className="grid grid-cols-5 gap-2">
-                            {petTypes.map((type) => (
-                              <button
-                                key={type.id}
-                                type="button"
-                                onClick={() => setCurrentPet({ ...currentPet, type: type.id as PetType })}
-                                className={`p-3 rounded-xl flex flex-col items-center gap-1 transition-all ${
-                                  currentPet.type === type.id
-                                    ? "bg-primary text-primary-foreground"
-                                    : "bg-card border border-border hover:border-primary/30"
-                                }`}
-                              >
-                                <type.icon className="w-5 h-5" />
-                                <span className="text-xs">{type.label}</span>
-                              </button>
+                    {step === 3 && (
+                      <motion.div
+                        key="step3"
+                        custom={step}
+                        variants={variants}
+                        initial="enter"
+                        animate="center"
+                        exit="exit"
+                        transition={{ duration: 0.3 }}
+                        className="space-y-4"
+                      >
+                        <div className="text-center mb-6">
+                          <h1 className="text-2xl font-bold mb-2">Add Your Pets</h1>
+                          <p className="text-muted-foreground">Tell us about your furry friends</p>
+                        </div>
+
+                        {/* List of added pets */}
+                        {fields.length > 0 && (
+                          <div className="space-y-3 mb-4">
+                            {fields.map((field, index) => (
+                              <div key={field.id} className="flex items-center justify-between p-4 bg-muted/50 rounded-xl animate-in fade-in slide-in-from-bottom-2">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
+                                    <PawPrint className="w-6 h-6 text-primary" />
+                                  </div>
+                                  <div>
+                                    <p className="font-semibold">{field.name}</p>
+                                    <p className="text-sm text-muted-foreground">{field.breed} • {field.gender}</p>
+                                  </div>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => remove(index)}
+                                  className="w-8 h-8 rounded-full bg-destructive/10 text-destructive flex items-center justify-center hover:bg-destructive/20 transition-colors"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </div>
                             ))}
                           </div>
+                        )}
+                        {form.formState.errors.pets && (
+                          <p className="text-sm text-destructive font-medium text-center">
+                            {form.formState.errors.pets.message}
+                          </p>
+                        )}
 
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <label className="text-sm font-medium mb-1 block">Pet Name</label>
-                              <input
-                                type="text"
-                                name="name"
-                                value={currentPet.name || ""}
-                                onChange={handlePetInputChange}
-                                placeholder="Buddy"
-                                className="w-full h-10 px-3 rounded-lg bg-card border border-border focus:border-primary outline-none"
-                              />
+                        {/* Add Pet Form */}
+                        {showPetForm ? (
+                          <div className="p-4 bg-muted/30 rounded-xl space-y-4">
+                            <div className="grid grid-cols-5 gap-2">
+                              {petTypes.map((type) => (
+                                <button
+                                  key={type.id}
+                                  type="button"
+                                  onClick={() => setTempPet(prev => ({ ...prev, type: type.id as any }))}
+                                  className={`p-3 rounded-xl flex flex-col items-center gap-1 transition-all ${tempPet.type === type.id
+                                    ? "bg-primary text-primary-foreground"
+                                    : "bg-card border border-border hover:border-primary/30"
+                                    }`}
+                                >
+                                  <type.icon className="w-5 h-5" />
+                                  <span className="text-xs">{type.label}</span>
+                                </button>
+                              ))}
                             </div>
-                            <div>
-                              <label className="text-sm font-medium mb-1 block">Breed</label>
-                              <input
-                                type="text"
-                                name="breed"
-                                value={currentPet.breed || ""}
-                                onChange={handlePetInputChange}
-                                placeholder="Golden Retriever"
-                                className="w-full h-10 px-3 rounded-lg bg-card border border-border focus:border-primary outline-none"
-                              />
+
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <label className="text-sm font-medium mb-1 block">Pet Name</label>
+                                <Input
+                                  value={tempPet.name}
+                                  onChange={e => setTempPet({ ...tempPet, name: e.target.value })}
+                                  placeholder="Buddy"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-sm font-medium mb-1 block">Breed</label>
+                                <Input
+                                  value={tempPet.breed}
+                                  onChange={e => setTempPet({ ...tempPet, breed: e.target.value })}
+                                  placeholder="Golden Retriever"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-4">
+                              <div>
+                                <label className="text-sm font-medium mb-1 block">Age</label>
+                                <Input
+                                  value={tempPet.age}
+                                  onChange={e => setTempPet({ ...tempPet, age: e.target.value })}
+                                  placeholder="3"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-sm font-medium mb-1 block">Weight</label>
+                                <Input
+                                  value={tempPet.weight}
+                                  onChange={e => setTempPet({ ...tempPet, weight: e.target.value })}
+                                  placeholder="kg"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-sm font-medium mb-1 block">Gender</label>
+                                <select
+                                  value={tempPet.gender}
+                                  onChange={e => setTempPet({ ...tempPet, gender: e.target.value as any })}
+                                  className="w-full h-10 px-3 rounded-md border border-input bg-background"
+                                >
+                                  <option value="male">Male</option>
+                                  <option value="female">Female</option>
+                                </select>
+                              </div>
+                            </div>
+
+                            <div className="flex gap-2">
+                              <Button type="button" variant="outline" onClick={() => setShowPetForm(false)} className="flex-1">Cancel</Button>
+                              <Button type="button" onClick={handleAddPet} className="flex-1">Add Pet</Button>
                             </div>
                           </div>
-
-                          <div className="grid grid-cols-3 gap-4">
-                            <div>
-                              <label className="text-sm font-medium mb-1 block">Age</label>
-                              <input
-                                type="text"
-                                name="age"
-                                value={currentPet.age || ""}
-                                onChange={handlePetInputChange}
-                                placeholder="3 years"
-                                className="w-full h-10 px-3 rounded-lg bg-card border border-border focus:border-primary outline-none"
-                              />
-                            </div>
-                            <div>
-                              <label className="text-sm font-medium mb-1 block">Weight</label>
-                              <input
-                                type="text"
-                                name="weight"
-                                value={currentPet.weight || ""}
-                                onChange={handlePetInputChange}
-                                placeholder="15 kg"
-                                className="w-full h-10 px-3 rounded-lg bg-card border border-border focus:border-primary outline-none"
-                              />
-                            </div>
-                            <div>
-                              <label className="text-sm font-medium mb-1 block">Gender</label>
-                              <select
-                                name="gender"
-                                value={currentPet.gender}
-                                onChange={handlePetInputChange}
-                                className="w-full h-10 px-3 rounded-lg bg-card border border-border focus:border-primary outline-none"
-                              >
-                                <option value="male">Male</option>
-                                <option value="female">Female</option>
-                              </select>
-                            </div>
-                          </div>
-
-                          <div>
-                            <label className="text-sm font-medium mb-1 block">Special Needs (Optional)</label>
-                            <textarea
-                              name="specialNeeds"
-                              value={currentPet.specialNeeds || ""}
-                              onChange={handlePetInputChange}
-                              placeholder="Any allergies, medications, or special requirements..."
-                              rows={2}
-                              className="w-full px-3 py-2 rounded-lg bg-card border border-border focus:border-primary outline-none resize-none"
-                            />
-                          </div>
-
-                          <div className="flex gap-2">
-                            <Button type="button" variant="outline" onClick={() => setShowPetForm(false)} className="flex-1">
-                              Cancel
-                            </Button>
-                            <Button type="button" onClick={addPet} className="flex-1">
-                              Add Pet
-                            </Button>
-                          </div>
-                        </div>
-                      ) : (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => setShowPetForm(true)}
-                          className="w-full gap-2"
-                        >
-                          <Plus className="w-4 h-4" />
-                          Add a Pet
-                        </Button>
-                      )}
-                    </div>
-                  )}
+                        ) : (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setShowPetForm(true)}
+                            className="w-full gap-2"
+                          >
+                            <Plus className="w-4 h-4" />
+                            Add a Pet
+                          </Button>
+                        )}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
 
                   {/* Navigation */}
-                  <div className="flex gap-3 mt-6">
+                  <div className="flex gap-3 mt-8">
                     {step > 1 && (
                       <Button
                         type="button"
@@ -560,29 +628,40 @@ const RegisterOwner = () => {
                         Back
                       </Button>
                     )}
-                    <Button
-                      type="submit"
-                      variant="hero"
-                      className="flex-1 gap-2"
-                      disabled={!validateStep() || loading}
-                    >
-                      {loading ? "Creating account..." : step < 3 ? "Continue" : "Create Account"}
-                      {!loading && <ArrowRight className="w-4 h-4" />}
-                    </Button>
+                    {step < 3 ? (
+                      <Button
+                        type="button"
+                        variant="hero"
+                        className="flex-1 gap-2"
+                        onClick={handleNextStep}
+                      >
+                        Continue
+                        <ArrowRight className="w-4 h-4" />
+                      </Button>
+                    ) : (
+                      <Button
+                        type="submit"
+                        variant="hero"
+                        className="flex-1 gap-2"
+                        disabled={loading}
+                      >
+                        {loading ? "Creating Account..." : "Create Account"}
+                        {!loading && <ArrowRight className="w-4 h-4" />}
+                      </Button>
+                    )}
                   </div>
                 </form>
+              </Form>
 
-                {/* Login link */}
-                <p className="text-center text-muted-foreground mt-6">
-                  Already have an account?{" "}
-                  <Link to="/login" className="text-primary font-medium hover:underline">
-                    Log in
-                  </Link>
-                </p>
-              </div>
+              <p className="text-center text-muted-foreground mt-6">
+                Already have an account?{" "}
+                <Link to="/login" className="text-primary font-medium hover:underline">
+                  Log in
+                </Link>
+              </p>
             </div>
           </div>
-        </main>
+        </div>
       </div>
     </>
   );

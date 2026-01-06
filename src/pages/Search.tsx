@@ -1,15 +1,13 @@
 import { useState, useEffect } from "react";
 import { Helmet } from "react-helmet-async";
 import { Link } from "react-router-dom";
-import Navbar from "@/components/layout/Navbar";
-import Footer from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { 
-  Search as SearchIcon, 
-  MapPin, 
-  Star, 
-  Shield, 
+import {
+  Search as SearchIcon,
+  MapPin,
+  Star,
+  Shield,
   Heart,
   SlidersHorizontal,
   X,
@@ -149,30 +147,59 @@ const Search = () => {
   useEffect(() => {
     const fetchCaregivers = async () => {
       setLoading(true);
-      try {
-        // First fetch caregiver profiles
-        const { data: caregiverData, error: caregiverError } = await supabase
-          .from("caregiver_profiles")
-          .select("*")
-          .order("rating", { ascending: false });
+      console.log("[Search] Starting to fetch caregivers...");
 
-        if (caregiverError) throw caregiverError;
+      // Create a timeout promise
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Query timeout - RLS may be blocking access")), 5000)
+      );
+
+      try {
+        // Race against timeout
+        const caregiverResult = await Promise.race([
+          supabase
+            .from("caregiver_profiles")
+            .select("*")
+            .order("rating", { ascending: false }),
+          timeoutPromise
+        ]) as { data: any; error: any };
+
+        const { data: caregiverData, error: caregiverError } = caregiverResult;
+
+        console.log("[Search] Caregiver query result:", { caregiverData, caregiverError });
+
+        if (caregiverError) {
+          console.error("[Search] Caregiver query error:", caregiverError);
+          throw caregiverError;
+        }
 
         if (caregiverData && caregiverData.length > 0) {
+          console.log(`[Search] Found ${caregiverData.length} caregivers in database`);
           // Fetch profiles for all caregivers
-          const userIds = caregiverData.map(c => c.user_id);
-          const { data: profilesData, error: profilesError } = await supabase
-            .from("profiles")
-            .select("id, full_name, avatar_url, city, pincode")
-            .in("id", userIds);
+          const userIds = caregiverData.map((c: any) => c.user_id);
 
-          if (profilesError) throw profilesError;
+          const profilesResult = await Promise.race([
+            supabase
+              .from("profiles")
+              .select("id, full_name, avatar_url, city, pincode")
+              .in("id", userIds),
+            timeoutPromise
+          ]) as { data: any; error: any };
+
+          const { data: profilesData, error: profilesError } = profilesResult;
+
+          console.log("[Search] Profiles query result:", { profilesData, profilesError });
+
+          if (profilesError) {
+            console.error("[Search] Profiles query error:", profilesError);
+            throw profilesError;
+          }
 
           // Create a map for quick lookup
-          const profilesMap = new Map(profilesData?.map(p => [p.id, p]) || []);
+          const profilesMap = new Map(profilesData?.map((p: any) => [p.id, p]) || []);
 
           const mappedCaregivers: Caregiver[] = caregiverData.map((item: any) => {
-            const profile = profilesMap.get(item.user_id);
+            const profile = profilesMap.get(item.user_id) as any;
             return {
               id: item.id,
               user_id: item.user_id,
@@ -189,14 +216,17 @@ const Search = () => {
               bio: item.bio || "Experienced pet caregiver ready to help!",
             };
           });
+          console.log("[Search] Mapped caregivers:", mappedCaregivers);
           setCaregivers(mappedCaregivers);
         } else {
           // Use mock data if no real caregivers exist
+          console.log("[Search] No caregivers found in database, using mock data");
           setCaregivers(mockCaregivers);
         }
       } catch (err) {
-        console.error("Error fetching caregivers:", err);
-        // Fallback to mock data on error
+        console.error("[Search] Error fetching caregivers:", err);
+        // Fallback to mock data on error or timeout
+        console.log("[Search] Using mock data as fallback");
         setCaregivers(mockCaregivers);
       } finally {
         setLoading(false);
@@ -209,11 +239,11 @@ const Search = () => {
   const filteredCaregivers = caregivers.filter((caregiver) => {
     const matchesSearch = caregiver.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       caregiver.location.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesService = selectedService === "All Services" || 
+    const matchesService = selectedService === "All Services" ||
       caregiver.services.some(s => s.toLowerCase().includes(selectedService.toLowerCase()));
     const matchesPrice = caregiver.price >= priceRange[0] && caregiver.price <= priceRange[1];
     const matchesVerified = !verifiedOnly || caregiver.verified;
-    
+
     return matchesSearch && matchesService && matchesPrice && matchesVerified;
   });
 
@@ -221,22 +251,20 @@ const Search = () => {
     <>
       <Helmet>
         <title>Find Pet Caregivers - Search Dog Walkers, Pet Sitters | PetPals</title>
-        <meta 
-          name="description" 
-          content="Search verified pet caregivers near you. Filter by service, price, ratings, and availability. Find the perfect dog walker or pet sitter today." 
+        <meta
+          name="description"
+          content="Search verified pet caregivers near you. Filter by service, price, ratings, and availability. Find the perfect dog walker or pet sitter today."
         />
       </Helmet>
-      
-      <div className="min-h-screen bg-background">
-        <Navbar />
-        
+
+      <div className="bg-background">
         <main className="pt-20">
           {/* Search Header */}
           <section className="bg-muted/30 border-b border-border py-8">
             <div className="container mx-auto px-4">
               <div className="max-w-4xl mx-auto">
                 <h1 className="text-3xl font-bold mb-6">Find Pet Caregivers</h1>
-                
+
                 <div className="bg-card rounded-2xl shadow-soft p-4 border border-border">
                   <div className="flex flex-col md:flex-row gap-3">
                     <div className="flex-1 relative">
@@ -271,11 +299,10 @@ const Search = () => {
                       <button
                         key={service}
                         onClick={() => setSelectedService(service)}
-                        className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
-                          selectedService === service
-                            ? "bg-primary text-primary-foreground"
-                            : "bg-muted text-muted-foreground hover:bg-muted/80"
-                        }`}
+                        className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${selectedService === service
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted text-muted-foreground hover:bg-muted/80"
+                          }`}
                       >
                         {service}
                       </button>
@@ -385,7 +412,7 @@ const Search = () => {
                             <h3 className="font-semibold group-hover:text-primary transition-colors truncate">
                               {caregiver.name}
                             </h3>
-                            <button 
+                            <button
                               className="shrink-0 w-8 h-8 rounded-full bg-muted flex items-center justify-center hover:bg-primary/10 transition-colors"
                               onClick={(e) => e.preventDefault()}
                             >
@@ -447,8 +474,6 @@ const Search = () => {
             </div>
           </section>
         </main>
-        
-        <Footer />
       </div>
     </>
   );

@@ -6,6 +6,8 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
 import { AuthProvider } from "@/hooks/useAuth";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+import MainLayout from "@/components/layout/MainLayout";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import Search from "./pages/Search";
@@ -28,30 +30,32 @@ const App = () => (
           <Sonner />
           <BrowserRouter>
             <Routes>
-              <Route path="/" element={<Index />} />
-              <Route path="/search" element={<Search />} />
-              <Route path="/register" element={<Register />} />
-              <Route path="/register/owner" element={<RegisterOwner />} />
-              <Route path="/register/caregiver" element={<RegisterCaregiver />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/caregiver/:id" element={<CaregiverProfile />} />
-              <Route 
-                path="/dashboard/owner" 
-                element={
-                  <ProtectedRoute allowedRoles={['owner']}>
-                    <OwnerDashboard />
-                  </ProtectedRoute>
-                } 
-              />
-              <Route 
-                path="/dashboard/caregiver" 
-                element={
-                  <ProtectedRoute allowedRoles={['caregiver']}>
-                    <CaregiverDashboard />
-                  </ProtectedRoute>
-                } 
-              />
-              <Route path="*" element={<NotFound />} />
+              <Route element={<MainLayout />}>
+                <Route path="/" element={<Index />} />
+                <Route path="/search" element={<Search />} />
+                <Route path="/register" element={<Register />} />
+                <Route path="/register/owner" element={<RegisterOwner />} />
+                <Route path="/register/caregiver" element={<RegisterCaregiver />} />
+                <Route path="/login" element={<Login />} />
+                <Route path="/caregiver/:id" element={<CaregiverProfile />} />
+                <Route
+                  path="/dashboard/owner"
+                  element={
+                    <ProtectedRoute allowedRoles={['owner']}>
+                      <OwnerDashboard />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/dashboard/caregiver"
+                  element={
+                    <ProtectedRoute allowedRoles={['caregiver']}>
+                      <CaregiverDashboard />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route path="*" element={<NotFound />} />
+              </Route>
             </Routes>
           </BrowserRouter>
         </TooltipProvider>
