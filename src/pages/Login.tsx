@@ -1,15 +1,14 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Helmet } from "react-helmet-async";
 import { Link, useNavigate } from "react-router-dom";
 import Navbar from "@/components/layout/Navbar";
 import { Button } from "@/components/ui/button";
-import { PawPrint, Mail, Lock, ArrowRight } from "lucide-react";
+import { PawPrint, Mail, Lock, ArrowRight, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 
 const Login = () => {
   const navigate = useNavigate();
-  const { signIn, userRole } = useAuth();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     email: "",
@@ -27,26 +26,53 @@ const Login = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-
-    const { error } = await signIn(formData.email, formData.password);
     
-    if (error) {
-      toast.error(error.message || "Failed to sign in");
-      setLoading(false);
+    if (!formData.email || !formData.password) {
+      toast.error("Please enter both email and password");
       return;
     }
 
-    toast.success("Welcome back!");
-    // Navigate based on role - we'll check after auth state updates
-    // For now navigate to owner dashboard, the auth context will handle role
-    setTimeout(() => {
-      if (userRole === 'caregiver') {
-        navigate("/dashboard/caregiver");
-      } else {
-        navigate("/dashboard/owner");
+    setLoading(true);
+
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: formData.email,
+        password: formData.password,
+      });
+      
+      if (error) {
+        if (error.message.includes("Invalid login credentials")) {
+          toast.error("Invalid email or password. Please try again.");
+        } else if (error.message.includes("Email not confirmed")) {
+          toast.error("Please confirm your email before logging in.");
+        } else {
+          toast.error(error.message || "Failed to sign in");
+        }
+        setLoading(false);
+        return;
       }
-    }, 100);
+
+      if (data.user) {
+        // Fetch user role to navigate to correct dashboard
+        const { data: roleData } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", data.user.id)
+          .single();
+
+        toast.success("Welcome back!");
+        
+        if (roleData?.role === 'caregiver') {
+          navigate("/dashboard/caregiver");
+        } else {
+          navigate("/dashboard/owner");
+        }
+      }
+    } catch (err: any) {
+      toast.error("An unexpected error occurred. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
