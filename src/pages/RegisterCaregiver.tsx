@@ -89,7 +89,14 @@ const RegisterCaregiver = () => {
     setLoading(true);
 
     try {
-      // Step 1: Sign up the user
+      // Parse experience to years
+      let yearsExp = 0;
+      if (formData.experience === "< 1 year") yearsExp = 0;
+      else if (formData.experience === "1-2 years") yearsExp = 1;
+      else if (formData.experience === "3-5 years") yearsExp = 3;
+      else if (formData.experience === "5+ years") yearsExp = 5;
+
+      // Sign up the user - the database trigger will create profile, role, and caregiver_profile
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
@@ -121,46 +128,26 @@ const RegisterCaregiver = () => {
 
       const userId = authData.user.id;
 
-      // Step 2: Create profile entry
+      // Wait briefly for the trigger to complete
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Update profile with additional details (city, pincode)
       const { error: profileError } = await supabase
         .from('profiles')
-        .upsert({
-          id: userId,
-          email: formData.email,
-          full_name: `${formData.firstName} ${formData.lastName}`,
-          phone: formData.phone,
+        .update({
           city: formData.city,
           pincode: formData.pincode,
-        });
+        })
+        .eq('id', userId);
 
       if (profileError) {
-        console.error("Profile error:", profileError);
+        console.error("Profile update error:", profileError);
       }
 
-      // Step 3: Create user role
-      const { error: roleError } = await supabase
-        .from('user_roles')
-        .upsert({
-          user_id: userId,
-          role: 'caregiver',
-        });
-
-      if (roleError) {
-        console.error("Role error:", roleError);
-      }
-
-      // Step 4: Parse experience to years
-      let yearsExp = 0;
-      if (formData.experience === "< 1 year") yearsExp = 0;
-      else if (formData.experience === "1-2 years") yearsExp = 1;
-      else if (formData.experience === "3-5 years") yearsExp = 3;
-      else if (formData.experience === "5+ years") yearsExp = 5;
-
-      // Step 5: Create caregiver profile
+      // Update caregiver profile with additional details
       const { data: caregiverProfile, error: caregiverError } = await supabase
         .from('caregiver_profiles')
-        .upsert({
-          user_id: userId,
+        .update({
           bio: formData.bio || null,
           years_experience: yearsExp,
           service_radius: parseInt(formData.serviceRadius),
@@ -169,14 +156,15 @@ const RegisterCaregiver = () => {
           ),
           hourly_rate: Math.min(...Object.values(selectedServices).map(p => parseFloat(p) || 300)),
         })
+        .eq('user_id', userId)
         .select()
         .single();
 
       if (caregiverError) {
-        console.error("Caregiver profile error:", caregiverError);
+        console.error("Caregiver profile update error:", caregiverError);
       }
 
-      // Step 6: Save individual service pricing
+      // Save individual service pricing
       if (caregiverProfile) {
         const serviceEntries = Object.entries(selectedServices).map(([serviceId, price]) => ({
           caregiver_id: caregiverProfile.id,
@@ -200,6 +188,7 @@ const RegisterCaregiver = () => {
     } catch (err: any) {
       console.error("Registration error:", err);
       toast.error("An unexpected error occurred. Please try again.");
+      setLoading(false);
     } finally {
       setLoading(false);
     }
