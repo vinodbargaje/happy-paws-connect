@@ -148,33 +148,47 @@ const Search = () => {
 
   useEffect(() => {
     const fetchCaregivers = async () => {
+      setLoading(true);
       try {
-        const { data, error } = await supabase
+        // First fetch caregiver profiles
+        const { data: caregiverData, error: caregiverError } = await supabase
           .from("caregiver_profiles")
-          .select(`
-            *,
-            profile:profiles(id, full_name, avatar_url, city, pincode)
-          `)
+          .select("*")
           .order("rating", { ascending: false });
 
-        if (error) throw error;
+        if (caregiverError) throw caregiverError;
 
-        if (data && data.length > 0) {
-          const mappedCaregivers: Caregiver[] = data.map((item: any) => ({
-            id: item.id,
-            user_id: item.user_id,
-            name: item.profile?.full_name || "Caregiver",
-            image: item.profile?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(item.profile?.full_name || "C")}&background=random`,
-            rating: item.rating || 0,
-            reviews: item.total_reviews || 0,
-            location: item.profile?.city ? `${item.profile.city}${item.profile.pincode ? `, ${item.profile.pincode}` : ""}` : "Location not set",
-            services: item.services_offered || ["Pet Care"],
-            price: item.hourly_rate || 300,
-            priceUnit: "per session",
-            verified: item.is_verified || false,
-            experience: item.years_experience ? `${item.years_experience} years` : "New",
-            bio: item.bio || "Experienced pet caregiver ready to help!",
-          }));
+        if (caregiverData && caregiverData.length > 0) {
+          // Fetch profiles for all caregivers
+          const userIds = caregiverData.map(c => c.user_id);
+          const { data: profilesData, error: profilesError } = await supabase
+            .from("profiles")
+            .select("id, full_name, avatar_url, city, pincode")
+            .in("id", userIds);
+
+          if (profilesError) throw profilesError;
+
+          // Create a map for quick lookup
+          const profilesMap = new Map(profilesData?.map(p => [p.id, p]) || []);
+
+          const mappedCaregivers: Caregiver[] = caregiverData.map((item: any) => {
+            const profile = profilesMap.get(item.user_id);
+            return {
+              id: item.id,
+              user_id: item.user_id,
+              name: profile?.full_name || "Caregiver",
+              image: profile?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile?.full_name || "C")}&background=random`,
+              rating: Number(item.rating) || 0,
+              reviews: item.total_reviews || 0,
+              location: profile?.city ? `${profile.city}${profile.pincode ? `, ${profile.pincode}` : ""}` : "Location not set",
+              services: item.services_offered?.length > 0 ? item.services_offered : ["Pet Care"],
+              price: Number(item.hourly_rate) || 300,
+              priceUnit: "per session",
+              verified: item.is_verified || false,
+              experience: item.years_experience ? `${item.years_experience} years` : "New",
+              bio: item.bio || "Experienced pet caregiver ready to help!",
+            };
+          });
           setCaregivers(mappedCaregivers);
         } else {
           // Use mock data if no real caregivers exist

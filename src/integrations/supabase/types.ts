@@ -147,6 +147,50 @@ export type Database = {
         }
         Relationships: []
       }
+      caregiver_services: {
+        Row: {
+          caregiver_id: string
+          created_at: string
+          daily_rate: number | null
+          hourly_rate: number | null
+          id: string
+          is_active: boolean
+          service_name: string
+          session_rate: number | null
+          updated_at: string
+        }
+        Insert: {
+          caregiver_id: string
+          created_at?: string
+          daily_rate?: number | null
+          hourly_rate?: number | null
+          id?: string
+          is_active?: boolean
+          service_name: string
+          session_rate?: number | null
+          updated_at?: string
+        }
+        Update: {
+          caregiver_id?: string
+          created_at?: string
+          daily_rate?: number | null
+          hourly_rate?: number | null
+          id?: string
+          is_active?: boolean
+          service_name?: string
+          session_rate?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "caregiver_services_caregiver_id_fkey"
+            columns: ["caregiver_id"]
+            isOneToOne: false
+            referencedRelation: "caregiver_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pets: {
         Row: {
           age: number | null

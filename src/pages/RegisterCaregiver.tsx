@@ -16,7 +16,6 @@ import {
   Check
 } from "lucide-react";
 import { toast } from "sonner";
-import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 
 const services = [
@@ -32,7 +31,6 @@ const services = [
 
 const RegisterCaregiver = () => {
   const navigate = useNavigate();
-  const { signUp } = useAuth();
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
@@ -90,47 +88,121 @@ const RegisterCaregiver = () => {
 
     setLoading(true);
 
-    const { error } = await signUp(formData.email, formData.password, {
-      full_name: `${formData.firstName} ${formData.lastName}`,
-      phone: formData.phone,
-      role: 'caregiver',
-    });
+    try {
+      // Step 1: Sign up the user
+      const { data: authData, error: signUpError } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/`,
+          data: {
+            full_name: `${formData.firstName} ${formData.lastName}`,
+            phone: formData.phone,
+            role: 'caregiver',
+          },
+        },
+      });
 
-    if (error) {
-      toast.error(error.message || "Failed to create account");
-      setLoading(false);
-      return;
-    }
+      if (signUpError) {
+        if (signUpError.message.includes("already registered")) {
+          toast.error("This email is already registered. Please log in instead.");
+        } else {
+          toast.error(signUpError.message || "Failed to create account");
+        }
+        setLoading(false);
+        return;
+      }
 
-    // Update profile and caregiver profile
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      await supabase
+      if (!authData.user) {
+        toast.error("Failed to create account. Please try again.");
+        setLoading(false);
+        return;
+      }
+
+      const userId = authData.user.id;
+
+      // Step 2: Create profile entry
+      const { error: profileError } = await supabase
         .from('profiles')
-        .update({ city: formData.city, pincode: formData.pincode })
-        .eq('id', user.id);
+        .upsert({
+          id: userId,
+          email: formData.email,
+          full_name: `${formData.firstName} ${formData.lastName}`,
+          phone: formData.phone,
+          city: formData.city,
+          pincode: formData.pincode,
+        });
 
-      // Parse experience to years
+      if (profileError) {
+        console.error("Profile error:", profileError);
+      }
+
+      // Step 3: Create user role
+      const { error: roleError } = await supabase
+        .from('user_roles')
+        .upsert({
+          user_id: userId,
+          role: 'caregiver',
+        });
+
+      if (roleError) {
+        console.error("Role error:", roleError);
+      }
+
+      // Step 4: Parse experience to years
       let yearsExp = 0;
       if (formData.experience === "< 1 year") yearsExp = 0;
       else if (formData.experience === "1-2 years") yearsExp = 1;
       else if (formData.experience === "3-5 years") yearsExp = 3;
       else if (formData.experience === "5+ years") yearsExp = 5;
 
-      await supabase
+      // Step 5: Create caregiver profile
+      const { data: caregiverProfile, error: caregiverError } = await supabase
         .from('caregiver_profiles')
-        .update({
-          bio: formData.bio,
+        .upsert({
+          user_id: userId,
+          bio: formData.bio || null,
           years_experience: yearsExp,
           service_radius: parseInt(formData.serviceRadius),
-          services_offered: Object.keys(selectedServices),
-          hourly_rate: Math.min(...Object.values(selectedServices).map(p => parseFloat(p) || 0)),
+          services_offered: Object.keys(selectedServices).map(id => 
+            services.find(s => s.id === id)?.label || id
+          ),
+          hourly_rate: Math.min(...Object.values(selectedServices).map(p => parseFloat(p) || 300)),
         })
-        .eq('user_id', user.id);
-    }
+        .select()
+        .single();
 
-    toast.success("Account created! Welcome to PetPals.");
-    navigate("/dashboard/caregiver");
+      if (caregiverError) {
+        console.error("Caregiver profile error:", caregiverError);
+      }
+
+      // Step 6: Save individual service pricing
+      if (caregiverProfile) {
+        const serviceEntries = Object.entries(selectedServices).map(([serviceId, price]) => ({
+          caregiver_id: caregiverProfile.id,
+          service_name: services.find(s => s.id === serviceId)?.label || serviceId,
+          hourly_rate: parseFloat(price) || 0,
+        }));
+
+        if (serviceEntries.length > 0) {
+          const { error: servicesError } = await supabase
+            .from('caregiver_services')
+            .insert(serviceEntries);
+
+          if (servicesError) {
+            console.error("Services error:", servicesError);
+          }
+        }
+      }
+
+      toast.success("Account created! Welcome to PetPals.");
+      navigate("/dashboard/caregiver");
+    } catch (err: any) {
+      console.error("Registration error:", err);
+      toast.error("An unexpected error occurred. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const validateStep = () => {
